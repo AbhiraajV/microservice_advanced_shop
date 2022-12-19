@@ -1,0 +1,23 @@
+version: '3'
+services:
+
+  # customer-server:
+  #   build: .
+  #   environment:
+  #     - PORT=9000
+  #   depends_on:
+  #     - mongodb-container  
+
+
+  mongodb-container:
+    image: mongo
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=abhiraaj
+      - MONGO_INITDB_ROOT_PASSWORD=12345678
+    volumes:
+      - mongo-db:/data/db
+    ports:
+      - "27017:27017"
+
+volumes:
+  mongo-db:
