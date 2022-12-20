@@ -1,8 +1,15 @@
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const axios = require("axios");
-const { APP_SECRET } = require("../config");
+const {
+  APP_SECRET,
+  EXCHANGE_NAME,
+  QUEUE_NAME,
+  RABBITMQ_SETTINGS,
+} = require("../config");
 
+const amqp = require("amqplib");
+const { SHOPPING_BINDING_KEY } = require("../../../products/src/config");
 //Utility functions
 (module.exports.GenerateSalt = async () => {
   return await bcrypt.genSalt();
@@ -43,8 +50,46 @@ module.exports.FormateData = (data) => {
     throw new Error("Data Not found!");
   }
 };
-module.exports.PublishCustomerEvent = async (payload) => {
-  axios.post("http://localhost:8000/customer/app-events", {
-    payload,
-  });
+
+// ####### MESSAGE BROKER ##########
+
+module.exports.CreateChannel = async () => {
+  try {
+    // create a connection to rbmq client
+    const rbq_client = await amqp.connect(RABBITMQ_SETTINGS);
+    console.log("RabbitMQ Client Connected");
+    // create a channel over which msgs are send
+    const channel = await rbq_client.createChannel();
+    await channel.assertExchange(EXCHANGE_NAME, "direct", false);
+    console.log("Channel Established");
+    return channel;
+  } catch (error) {
+    console.log({ error });
+    throw error;
+  }
+};
+// create a queue which holds these msgs to be sent
+
+// subscriber & publisher
+module.exports.PublishMessages = async (channel, binding_key, messages) => {
+  try {
+    await channel.publish(EXCHANGE_NAME, binding_key, Buffer.from(messages));
+    console.log("Message sent ", messages);
+  } catch (error) {
+    throw error;
+  }
+};
+
+module.exports.SubscribeToMessages = async (channel, service) => {
+  try {
+    const appQueue = await channel.assertQueue(QUEUE_NAME);
+    channel.bindQueue(appQueue.queue, EXCHANGE_NAME, SHOPPING_BINDING_KEY);
+    channel.consume(appQueue.queue, (data) => {
+      console.log("Received Data");
+      console.log(data.content.toString());
+      channel.ack(data);
+    });
+  } catch (error) {
+    throw error;
+  }
 };
